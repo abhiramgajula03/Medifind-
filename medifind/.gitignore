@@ -1,0 +1,22 @@
+# Backend
+backend/target/
+*.class
+*.jar
+backend/uploads/
+
+# Frontend
+frontend/node_modules/
+frontend/build/
+frontend/.env
+
+# Real secrets (do not commit; use application.properties.example as a template)
+backend/src/main/resources/application.properties
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
