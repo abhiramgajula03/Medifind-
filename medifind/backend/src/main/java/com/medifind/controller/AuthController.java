@@ -1,13 +1,14 @@
 package com.medifind.controller;
 
 import com.medifind.config.JwtUtil;
+import com.medifind.model.Shop;
 import com.medifind.model.User;
-import com.medifind.repository.UserRepository;
 import com.medifind.repository.ShopRepository;
+import com.medifind.service.AuthService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
+import java.util.HashMap;
 import java.util.Map;
 
 @RestController
@@ -16,64 +17,41 @@ import java.util.Map;
 @CrossOrigin(origins = "http://localhost:3000")
 public class AuthController {
 
-    private final UserRepository userRepository;
-    private final PasswordEncoder passwordEncoder;
+    private final AuthService authService;
     private final JwtUtil jwtUtil;
     private final ShopRepository shopRepository;
 
-    // POST /api/auth/register
     @PostMapping("/register")
-    public ResponseEntity<?> register(@RequestBody Map<String, String> body) {
-        if (userRepository.existsByEmail(body.get("email"))) {
-            return ResponseEntity.badRequest().body("Email already registered");
+    public ResponseEntity<?> register(@RequestBody User user) {
+        Map<String, Object> res = authService.register(user);
+        if (res.containsKey("error")) {
+            return ResponseEntity.badRequest().body(res);
         }
-
-        User.Role requestedRole = "SHOPKEEPER".equals(body.get("role")) ? User.Role.SHOPKEEPER : User.Role.CUSTOMER;
-        User user = User.builder()
-                .name(body.get("name"))
-                .email(body.get("email"))
-                .password(passwordEncoder.encode(body.get("password")))
-                .phone(body.get("phone"))
-                .role(requestedRole)
-                .shopName(body.get("shopName"))
-                .shopAddress(body.get("shopAddress"))
-                .pincode(body.get("pincode"))
-                .licenseNumber(body.get("licenseNumber"))
-                .licensePhoto(body.get("licensePhoto"))
-                .approvalStatus(requestedRole == User.Role.SHOPKEEPER ? User.ApprovalStatus.PENDING : User.ApprovalStatus.NOT_REQUIRED)
-                .build();
-
-        userRepository.save(user);
-        if (requestedRole == User.Role.SHOPKEEPER) {
-            return ResponseEntity.ok(Map.of("role", user.getRole(), "name", user.getName(), "approvalStatus", user.getApprovalStatus(), "message", "Application submitted for admin approval"));
-        }
-        String token = jwtUtil.generateToken(user.getEmail(), user.getRole().name());
-        return ResponseEntity.ok(Map.of("token", token, "role", user.getRole(), "name", user.getName(), "userId", user.getId()));
+        return ResponseEntity.ok(res);
     }
 
-    // POST /api/auth/login
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody Map<String, String> body) {
-        User user = userRepository.findByEmail(body.get("email"))
-                .orElse(null);
-
-        if (user == null || !passwordEncoder.matches(body.get("password"), user.getPassword())) {
-            return ResponseEntity.status(401).body("Invalid email or password");
+    public ResponseEntity<?> login(@RequestBody Map<String, String> credentials) {
+        User user = authService.login(credentials.get("email"), credentials.get("password"));
+        if (user == null) {
+            return ResponseEntity.status(401).body(Map.of("error", "Invalid email or password"));
         }
-
-        if (user.getRole() == User.Role.SHOPKEEPER && user.getApprovalStatus() != User.ApprovalStatus.APPROVED) {
-            String status = user.getApprovalStatus() == null ? "PENDING" : user.getApprovalStatus().name();
-            return ResponseEntity.status(403).body("Shopkeeper application is " + status.toLowerCase() + ". Admin approval is required.");
+        if (user.getRole() == User.Role.SHOPKEEPER) {
+            if (user.getApprovalStatus() == User.ApprovalStatus.PENDING) {
+                return ResponseEntity.status(403).body(Map.of("error", "Your shopkeeper account application is pending Admin approval."));
+            }
+            if (user.getApprovalStatus() == User.ApprovalStatus.REJECTED) {
+                return ResponseEntity.status(403).body(Map.of("error", "Your shopkeeper account application was rejected by Admin."));
+            }
         }
-
-        String token = jwtUtil.generateToken(user.getEmail(), user.getRole().name());
-        Map<String, Object> response = new java.util.HashMap<>(Map.of(
-                "token", token,
-                "role", user.getRole(),
-                "name", user.getName(),
-                "userId", user.getId()
-        ));
-        shopRepository.findByCreatedById(user.getId()).ifPresent(shop -> response.put("shopId", shop.getId()));
+        String token = jwtUtil.generateToken(user);
+        Map<String, Object> response = new HashMap<>();
+        response.put("token", token);
+        response.put("role", user.getRole().name());
+        response.put("name", user.getName());
+        response.put("userId", user.getId());
+        shopRepository.findByCreatedById(user.getId()).map(Shop::getId)
+                .ifPresent(shopId -> response.put("shopId", shopId));
         return ResponseEntity.ok(response);
     }
 }

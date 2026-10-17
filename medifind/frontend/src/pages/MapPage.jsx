@@ -27,12 +27,6 @@ const mapOptions = {
   ],
 };
 
-const demoShops = [
-  { id: 'demo-1', name: 'Apollo Pharmacy', address: 'Himayat Nagar Main Road, Hyderabad', distance: '1.2 km', isOpen: true, is24hr: true },
-  { id: 'demo-2', name: 'MedPlus Pharmacy', address: 'Basheer Bagh, near Skyline Theatre', distance: '2.1 km', isOpen: true },
-  { id: 'demo-3', name: 'Wellness Forever', address: 'Abids Road, Hyderabad', distance: '3.4 km', isOpen: false },
-];
-
 function Icon({ children }) { return <span className="icon" aria-hidden="true">{children}</span>; }
 
 export default function MapPage() {
@@ -60,16 +54,17 @@ export default function MapPage() {
     navigator.geolocation.getCurrentPosition(async ({ coords }) => {
       const location = { lat: coords.latitude, lng: coords.longitude };
       setUserLocation(location);
+      try { sessionStorage.setItem('medifindCustomerLocation', JSON.stringify(location)); } catch (_) {}
       try {
         const res = await getNearbyShops(coords.latitude, coords.longitude, filter);
         setShops(res.data || []);
         mapRef.current?.panTo(location);
         mapRef.current?.setZoom(14);
       } catch (_) {
-        setError('Could not reach the shop service. Showing popular pharmacies nearby.');
+        setError('Could not reach the pharmacy service. Please try again.');
       } finally { setLoading(false); }
     }, () => {
-      setError('Allow location access to find pharmacies nearest to you.');
+      setError('Location permission is required to find pharmacies near you.');
       setLoading(false);
     }, { enableHighAccuracy: true, timeout: 10000 });
   };
@@ -77,7 +72,6 @@ export default function MapPage() {
   useEffect(() => {
     const timer = window.setTimeout(findNearbyShops, 350);
     return () => window.clearTimeout(timer);
-    // Ask for live location as soon as the customer opens MediFind.
   }, []);
 
   const focusShop = (shop) => {
@@ -95,7 +89,7 @@ export default function MapPage() {
     return `${(6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))).toFixed(1)} km`;
   };
 
-  const visibleShops = (shops.length ? shops : demoShops).filter((shop) => {
+  const visibleShops = shops.filter((shop) => {
     const matchesFilter = filter === 'all' || (filter === 'open' && shop.isOpen) || (filter === '24hr' && shop.is24hr);
     const matchesQuery = !query || `${shop.name} ${shop.address}`.toLowerCase().includes(query.toLowerCase());
     return matchesFilter && matchesQuery;
@@ -107,10 +101,16 @@ export default function MapPage() {
     if (!match) return;
     const timer = window.setTimeout(() => focusShop(match), 400);
     return () => window.clearTimeout(timer);
-    // Search results intentionally reposition the map marker.
   }, [query]);
 
   const toggleFavorite = (id) => setFavoriteIds((ids) => ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id]);
+
+  const navigateTo = (shop) => {
+    if (!userLocation || shop.lat == null || shop.lng == null) return;
+    const origin = `${userLocation.lat},${userLocation.lng}`;
+    const destination = `${shop.lat},${shop.lng}`;
+    window.open(`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&travelmode=driving`, '_blank', 'noopener,noreferrer');
+  };
 
   if (!isLoaded) return <div className="map-loading"><div className="loader" /><span>Preparing your map...</span></div>;
 
@@ -118,7 +118,7 @@ export default function MapPage() {
     <main className="medifind-shell">
       <section className="map-stage">
         <GoogleMap mapContainerClassName="google-map" zoom={13} center={userLocation || HYDERABAD} options={mapOptions} onLoad={onMapLoad}>
-          {userLocation && <Circle center={userLocation} radius={4000} options={{ fillColor: '#7ee2a8', fillOpacity: .06, strokeColor: '#7ee2a8', strokeOpacity: .3 }} />}
+          {userLocation && <Circle center={userLocation} radius={3000} options={{ fillColor: '#7ee2a8', fillOpacity: .06, strokeColor: '#7ee2a8', strokeOpacity: .3 }} />}
           <OverlayView
             position={userLocation || HYDERABAD}
             mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
@@ -130,7 +130,7 @@ export default function MapPage() {
             </div>
           </OverlayView>
           {shops.map((shop) => <Marker key={shop.id} position={{ lat: shop.lat, lng: shop.lng }} onClick={() => setSelectedShop(shop)} />)}
-          {selectedShop && <InfoWindow position={{ lat: selectedShop.lat, lng: selectedShop.lng }} onCloseClick={() => setSelectedShop(null)}><div className="map-info"><strong>{selectedShop.name}</strong><span>{selectedShop.isOpen ? 'Open now' : 'Closed'}</span><small>{selectedShop.address}</small></div></InfoWindow>}
+          {selectedShop && <InfoWindow position={{ lat: selectedShop.lat, lng: selectedShop.lng }} onCloseClick={() => setSelectedShop(null)}><div className="map-info"><strong>{selectedShop.name}</strong><span>{selectedShop.isOpen ? 'Open now' : 'Closed'}</span><small>{selectedShop.address}</small><button onClick={() => navigateTo(selectedShop)}>Navigate</button><Link to={`/customer/pharmacy/${selectedShop.id}`}>Pharmacy details &amp; medicine assistant →</Link></div></InfoWindow>}
         </GoogleMap>
 
         <header className="map-header">
@@ -159,13 +159,15 @@ export default function MapPage() {
 
         {error && <div className="notice">{error}</div>}
 
-        <div className="results-header"><h2>{shops.length ? `${visibleShops.length} shops nearby` : 'Popular nearby'}</h2><button onClick={findNearbyShops}>View all <span>›</span></button></div>
+        <div className="results-header"><h2>{userLocation ? `${visibleShops.length} shops within 3 km` : 'Nearby pharmacies'}</h2><button onClick={findNearbyShops}>View all <span>›</span></button></div>
         <div className="shop-results">
           {visibleShops.map((shop) => (
             <article className="shop-row" key={shop.id} onClick={() => focusShop(shop)}>
               <div className="history-icon">⌖</div>
               <div className="shop-copy"><div className="shop-title-line"><h3>{shop.name}</h3>{shop.is24hr && <span>24/7</span>}</div><p>{shop.address}</p><small><b className={shop.isOpen ? 'open' : 'closed'}>{shop.isOpen ? 'Open now' : 'Closed'}</b>{distanceTo(shop) && <> · {distanceTo(shop)} away</>}</small></div>
               <button className={`heart ${favoriteIds.includes(shop.id) ? 'saved' : ''}`} onClick={(e) => { e.stopPropagation(); toggleFavorite(shop.id); }} aria-label="Save pharmacy">{favoriteIds.includes(shop.id) ? '♥' : '♡'}</button>
+              <Link className="pharmacy-details-link" to={`/customer/pharmacy/${shop.id}`} onClick={(e) => e.stopPropagation()}>Details</Link>
+              <button className="navigate-shop" onClick={(e) => { e.stopPropagation(); navigateTo(shop); }}>Navigate</button>
             </article>
           ))}
           {!visibleShops.length && <div className="empty-state"><span>⌕</span><strong>No pharmacies match that search</strong><small>Try another name or filter</small></div>}

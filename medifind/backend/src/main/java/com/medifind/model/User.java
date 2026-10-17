@@ -2,7 +2,14 @@ package com.medifind.model;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
 import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.Collections;
 
 @Entity
 @Table(name = "users")
@@ -10,7 +17,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class User {
+public class User implements UserDetails {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -19,7 +26,7 @@ public class User {
     @Column(nullable = false)
     private String name;
 
-    @Column(unique = true, nullable = false)
+    @Column(nullable = false, unique = true)
     private String email;
 
     @Column(nullable = false)
@@ -27,36 +34,70 @@ public class User {
 
     private String phone;
 
-    // Shopkeeper registration and licence verification
-    private String shopName;
-    private String shopAddress;
-    private String pincode;
-    private String licenseNumber;
-
-    @Lob
-    @Column(columnDefinition = "LONGTEXT")
-    private String licensePhoto;
+    @Enumerated(EnumType.STRING)
+    private Role role = Role.CUSTOMER;
 
     @Enumerated(EnumType.STRING)
     private ApprovalStatus approvalStatus = ApprovalStatus.NOT_REQUIRED;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private Role role = Role.CUSTOMER;
+    @Column(name = "shop_name")
+    private String shopName;
 
-    // Saved home/work location
-    private Double savedLat;
-    private Double savedLng;
-    private String savedAddress;
+    @Column(name = "shop_address")
+    private String shopAddress;
 
-    @Column(name = "created_at")
-    private LocalDateTime createdAt = LocalDateTime.now();
+    @Column(name = "pincode")
+    private String pincode;
+
+    @Column(name = "license_number")
+    private String licenseNumber;
+
+    @Column(name = "license_photo", columnDefinition = "LONGTEXT")
+    private String licensePhoto;
+
+    @CreationTimestamp
+    @Column(name = "created_at", updatable = false)
+    private LocalDateTime createdAt;
+
+    @UpdateTimestamp
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
+    @Override
+    public Collection<? extends GrantedAuthority> getAuthorities() {
+        return Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + role.name()));
+    }
+
+    @Override
+    public String getUsername() {
+        return email;
+    }
+
+    @Override
+    public boolean isAccountNonExpired() {
+        return true;
+    }
+
+    @Override
+    public boolean isAccountNonLocked() {
+        return true;
+    }
+
+    @Override
+    public boolean isCredentialsNonExpired() {
+        return true;
+    }
+
+    @Override
+    public boolean isEnabled() {
+        return true;
+    }
 
     public enum Role {
-        CUSTOMER, ADMIN, SHOPKEEPER
+        CUSTOMER, SHOPKEEPER, ADMIN
     }
 
     public enum ApprovalStatus {
-        NOT_REQUIRED, PENDING, APPROVED, REJECTED
+        PENDING, APPROVED, REJECTED, NOT_REQUIRED
     }
 }

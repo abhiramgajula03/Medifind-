@@ -1,32 +1,39 @@
-# Dependencies
-node_modules/
-
-# Frontend build output
-medifind/frontend/build/
-medifind/frontend/.cache/
-
-# Backend build output
-medifind/backend/target/
-
-# Local environment files / secrets
-.env
-.env.*
-!*.env.example
-medifind/frontend/.env
-medifind/backend/.env
-
-# Logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# IDE / OS files
+# IDE and operating system files
 .idea/
 .vscode/
 *.iml
 .DS_Store
 Thumbs.db
 
-# Local screenshots and temporary artifacts
-screenshots/
+# Java / Spring Boot outputs
+**/target/
+*.class
+*.jar
+
+# React dependencies and generated builds
+**/node_modules/
+**/build/
+**/.cache/
+
+# Python virtual environments, caches, OCR runs and local logs
+**/.venv/
+**/__pycache__/
+**/temp/
+*.py[cod]
+*.log
+hs_err_pid*.log
+
+# Local environment and application configuration
+**/.env
+**/.env.*
+!**/.env.example
+**/application.properties
+!**/application.properties.example
+
+# Uploaded documents and local runtime data
+**/uploads/
+query
+
+# Local OCR output and scratch files
+medifind/ocr-service/final_invoice.json
+medifind/frontend/src/test_write.txt

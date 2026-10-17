@@ -12,6 +12,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 @Configuration
 @RequiredArgsConstructor
 public class AdminDataInitializer {
+
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
